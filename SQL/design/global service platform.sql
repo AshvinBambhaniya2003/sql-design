@@ -1,112 +1,185 @@
--- Make sure to attach design image/pdf in the same folder.
--- Write your DDL queries here.
+-- Table to store user information
+CREATE TABLE users (
+    user_id INT PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    user_type ENUM('client', 'creator') NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    birth_date DATE,
+    profile_image VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
-// Use DBML to define your database structure
-// Docs: https://dbml.dbdiagram.io/docs
+-- Table to store creator profiles
+CREATE TABLE creators (
+    creator_id INT PRIMARY KEY,
+    user_id INT UNIQUE NOT NULL,
+    description TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
 
-Table users {
-  user_id integer [primary key]
-  username varchar [unique, not null]
-  role ENUM('client', 'creator') [not null]
-  name varchar [not null]
-}
+-- Table to store categories of skills
+CREATE TABLE skill_categories (
+    category_id INT PRIMARY KEY,
+    category_name VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
+-- Table to store skills associated with categories
+CREATE TABLE skills (
+    skill_id INT PRIMARY KEY,
+    skill_name VARCHAR(255) NOT NULL UNIQUE,
+    category_id INT,
+    description TEXT,
+    skill_level ENUM('beginner', 'intermediate', 'advanced'),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES skill_categories(category_id)
+);
 
-Table Skills {
-  skill_id integer [primary key]
-  skill varchar [not null]
-  description VARCHAR
-}
+-- Table to store the relationship between creators and skills
+CREATE TABLE creator_skills (
+    creator_skill_id INT PRIMARY KEY,
+    creator_id INT NOT NULL,
+    skill_id INT NOT NULL,
+    experience_years INT,
+    FOREIGN KEY (creator_id) REFERENCES creators(creator_id),
+    FOREIGN KEY (skill_id) REFERENCES skills(skill_id)
+);
 
-Table Demos {
-  demo_id integer [primary key]
-  creator_id integer
-  skill_id integer
-  demo_type varchar
-  demo_path varchar
-}
+-- Table to store demo documents of creators
+CREATE TABLE creator_demos (
+    demo_id INT PRIMARY KEY,
+    creator_skill_id INT NOT NULL,
+    document_type ENUM('image', 'video') NOT NULL,
+    document_path VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (creator_skill_id) REFERENCES creator_skills(creator_skill_id)
+);
 
-Table Categories {
-  category_id integer [primary key]
-  category_name varchar [not null,unique]
-}
+-- Table to store project information
+CREATE TABLE projects (
+    project_id INT PRIMARY KEY,
+    client_id INT NOT NULL,
+    project_title VARCHAR(255) NOT NULL,
+    deadline DATE NOT NULL,
+    assigned_creator_id INT,
+    project_status ENUM('pending', 'in_progress', 'done', 'aborted') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (client_id) REFERENCES users(user_id),
+    FOREIGN KEY (assigned_creator_id) REFERENCES creators(creator_id)
+);
 
-TABLE creator_Skills {
-    creator_id integer [not null]
-    skill_id integer [not null]
-    Indexes {
-    (creator_id, skill_id) [pk] 
-  }
-}
+-- Table to store project details with current creator assignment
+CREATE TABLE project_details (
+    project_detail_id INT PRIMARY KEY,
+    project_id INT NOT NULL,
+    project_description TEXT NOT NULL, 
+    is_locked BOOLEAN DEFAULT FALSE,
+    raw_material_path VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(project_id)
+);
 
-Ref: creator_Skills.(creator_id, skill_id) - Demos.(creator_id, skill_id)
+-- Table to store ongoing communication between clients and creators
+CREATE TABLE project_communication (
+    communication_id INT PRIMARY KEY,
+    project_id INT NOT NULL,
+    sender_user_id INT NOT NULL,
+    receiver_user_id INT NOT NULL,
+    message TEXT NOT NULL,
+    communication_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(project_id),
+    FOREIGN KEY (sender_user_id) REFERENCES users(user_id),
+    FOREIGN KEY (receiver_user_id) REFERENCES users(user_id)
+);
 
-Table Projects {
-  project_id integer [primary key]
-  client_id integer [not null]
-  project_name varchar [not null]
-  project_description varchar [not null]
-  project_status ENUM('open', 'locked') [not null] 
-}
+-- Table to store project assignments history
+CREATE TABLE project_assignments (
+    assignment_id INT PRIMARY KEY,
+    project_id INT NOT NULL,
+    assignment_order INT,
+    old_assigned_creator_id INT,
+    new_assigned_creator_id INT,
+    assignment_status ENUM('in_progress', 'completed', 'needs_revisions') DEFAULT 'in_progress',
+    assignment_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(project_id),
+    FOREIGN KEY (old_assigned_creator_id) REFERENCES creators(creator_id),
+    FOREIGN KEY (new_assigned_creator_id) REFERENCES creators(creator_id)
+);
 
-Table ProjectMaterials {
-  material_id integer [primary key]
-  project_id integer [not null]
-  material_type varchar
-  path varchar
-}
+-- Table to store task submissions by creators
+CREATE TABLE task_submissions (
+    submission_id INT PRIMARY KEY,
+    creator_id INT,
+    assignment_id INT,
+    submission_type ENUM('document', 'code', 'image', 'video') DEFAULT 'document',
+    submission_path VARCHAR(255),
+    submission_text TEXT NOT NULL,
+    submission_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (assignment_id) REFERENCES project_assignments(assignment_id),
+    FOREIGN KEY (creator_id) REFERENCES creators(creator_id)
+);
 
-TABLE Assignments {
-  assignment_id integer [primary key]
-  project_id integer [not null]
-  creator_id integer [not null]
-  assignee_id INT
-  is_locked BOOLEAN [not null]
-  deadline date
-  submission_path VARCHAR 
-  is_done BOOLEAN [not null]
-}
+-- Table to store feedback from clients
+CREATE TABLE client_feedback (
+    feedback_id INT PRIMARY KEY,
+    submission_id INT,
+    client_id INT,
+    feedback_text TEXT NOT NULL,
+    feedback_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (submission_id) REFERENCES task_submissions(submission_id),
+    FOREIGN KEY (client_id) REFERENCES projects(client_id)
+);
 
+-- Indexes for user table
+CREATE INDEX idx_user_username ON users(username);
+CREATE INDEX idx_user_email ON users(email);
 
-Table AssignmentMaterials {
-  assigment_material_id integer [primary key]
-  assignment_id integer [not null]
-  material_type varchar
-  path varchar
-}
+-- Indexes for creators table
+CREATE INDEX idx_creators_user_id ON creators(user_id);
 
-Table CommunicationMessages {
-  message_id INT [primary key]
-  communication_id INT [not null, unique]
-  sender_id INT [not null, ref: > users.user_id]
-  receiver_id INT [not null, ref: > users.user_id]
-  message TEXT [not null]
-  sent_at TIMESTAMP
-  is_read BOOLEAN 
-}
+-- Indexes for skills table
+CREATE INDEX idx_skills_skill_name ON skills(skill_name);
+CREATE INDEX idx_skills_category_id ON skills(category_id);
 
+-- Indexes for creator_skills table
+CREATE INDEX idx_creator_skills_creator_id ON creator_skills(creator_id);
+CREATE INDEX idx_creator_skills_skill_id ON creator_skills(skill_id);
 
-Table Communications {
-  communication_id INT [PRIMARY KEY]
-  assignment_id INT [NOT NULL]
-}
+-- Indexes for creator_demos table
+CREATE INDEX idx_creator_demos_creator_skill_id ON creator_demos(creator_skill_id);
 
-Ref: "CommunicationMessages"."communication_id" - "Communications"."communication_id"
+-- Indexes for projects table
+CREATE INDEX idx_projects_client_id ON projects(client_id);
+CREATE INDEX idx_projects_assigned_creator_id ON projects(assigned_creator_id);
+CREATE INDEX idx_projects_status ON projects(project_status);
 
-Ref: "users"."user_id" < "creator_Skills"."creator_id"
+-- Indexes for project_details table
+CREATE INDEX idx_project_details_project_id ON project_details(project_id);
 
-Ref: "users"."user_id" < "Projects"."client_id"
+-- Indexes for project_communication table
+CREATE INDEX idx_project_communication_project_id ON project_communication(project_id);
+CREATE INDEX idx_project_communication_sender_user_id ON project_communication(sender_user_id);
+CREATE INDEX idx_project_communication_receiver_user_id ON project_communication(receiver_user_id);
 
-Ref: "Projects"."project_id" < "ProjectMaterials"."project_id"
+-- Indexes for project_assignments table
+CREATE INDEX idx_project_assignments_project_id ON project_assignments(project_id);
+CREATE INDEX idx_project_assignments_old_assigned_creator_id ON project_assignments(old_assigned_creator_id);
+CREATE INDEX idx_project_assignments_new_assigned_creator_id ON project_assignments(new_assigned_creator_id);
+CREATE INDEX idx_project_assignments_assignment_status ON project_assignments(assignment_status);
 
-Ref: "Categories"."category_name" < "Skills"."skill"
+-- Indexes for task_submissions table
+CREATE INDEX idx_task_submissions_creator_id ON task_submissions(creator_id);
+CREATE INDEX idx_task_submissions_assignment_id ON task_submissions(assignment_id);
+CREATE INDEX idx_task_submissions_submission_type ON task_submissions(submission_type);
 
-Ref: "Assignments"."assignment_id" < "AssignmentMaterials"."assignment_id"
-
-Ref: "Projects"."project_id" < "Assignments"."project_id"
-
-Ref: "Skills"."skill_id" < "creator_Skills"."skill_id"
-
-Ref: "Assignments"."assignment_id" < "Communications"."assignment_id"
-
-Ref: "users"."user_id" < "Assignments"."creator_id"
+-- Indexes for client_feedback table
+CREATE INDEX idx_client_feedback_submission_id ON client_feedback(submission_id);
+CREATE INDEX idx_client_feedback_client_id ON client_feedback(client_id);
